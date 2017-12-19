@@ -15,7 +15,8 @@ public class CLoadPaper : MonoBehaviour {
     PaperManager paperManager = new PaperManager ();
     [HideInInspector]
     public string paperLoadType = "get"; //题目加载类型 随机或者指定
-    private string strHostSerIp = "http://192.168.7.74:3010";
+    private string strHostSerIp = "http://127.0.0.1:3010";
+  //  private string strHostSerIp = "http://192.168.7.74:3010";
     //   private XKINI xkini;
     /// <summary>
     /// 操作点列表 存储了操作点对应的所有的状态值
@@ -516,6 +517,7 @@ public class CLoadPaper : MonoBehaviour {
         Debug.Log ("加载题目:" + n);
         paperManager.strIndex = "t" + n;
         paperManager.nIndex = n;
+        paperManager.nIndexReCover = n - 1;
         paperManager.nBigStepIndex = 0;
         paperManager.nSmallStepIndex = 0;
         paperManager.nBigStepLevel = 1;
@@ -610,6 +612,9 @@ public class CLoadPaper : MonoBehaviour {
   
     public int CheckSteps (string type_operation, string key, string value) {
         //  Debug.Log(type_operation + "    " + key);
+        // ReCoverStep(type_operation, key, value);
+        ReCoverStep2(type_operation, key, value);
+        return 0;
         tagDoStep eRt = new tagDoStep();
         eRt = XCheckSteps (type_operation, key, value);
         // 发送 操作记录
@@ -1068,12 +1073,698 @@ public class CLoadPaper : MonoBehaviour {
             }
         }
     }
+    bool m_bLockStep = false; // 锁定步骤
+    int m_nLockBigStepIndex = 0;// 锁定的 大步骤 index
+    int m_nLockSmailStepIndex = 0; // 锁定 的 小步骤的 index
+    void ReCoverStep(string type_operation, string key, string value)
+    {
+        tagDoStep tagRtDoStep = new tagDoStep();
+        // 获取 大步骤的 没有做的最小 level 和索引值
+        int nBigLevel = -1;
+        //   int nBigIndex = 0;
+        // 计算 当前的 level 一共 有多少 如果 >1 那么 就需要 进行 步骤 锁定判定
+        int nBigCount = 0;
+        int nLen = papers.data[paperManager.nIndexReCover].t1.step.Count;
+        int []arrBigLevel = new int[nLen];
+        int nnIndex = 0;
+
+        int g_nSmailLevel = 0;
+        int g_nBigsLevel = 0;
+        bool g_isReSetBigLevel = true;
+        bool g_isReSetSmailLevel = true;
+
+        if (g_isReSetBigLevel)
+        {
+            foreach (var sb in papers.data[paperManager.nIndexReCover].t1.step)
+            {
+                if (!sb.bDone)
+                {
+                    if (nBigLevel == -1)
+                    {
+                        nBigLevel = sb.blevel;
+                        nBigCount = 1;
+                    }
+                    else
+                    {
+                        if (nBigLevel == sb.blevel)
+                        {
+                            nBigCount++;
+                        }
+                        else
+                        {
+                            nBigLevel = nBigLevel > sb.blevel ? sb.blevel : nBigLevel;
+                        }
+                    }
+
+                    arrBigLevel[nnIndex++] = sb.blevel;
+                }
+            }
+            // 冒泡排序方法
+            for (int i = 0; i < arrBigLevel.Length - 1; i++)
+            {
+                for (int x = 0; x < arrBigLevel.Length - 1 - i; x++)
+                {
+                    if (arrBigLevel[x] > arrBigLevel[x + 1])
+                    {
+                        // 数值交换
+                        int a = arrBigLevel[x];
+                        arrBigLevel[x] = arrBigLevel[x + 1];
+                        arrBigLevel[x + 1] = a;
+                    }
+                }
+            }
+
+            if (nBigLevel == -1)
+            {
+                // 说明 没找到 题目答题完毕了
+            }
+
+            if (nBigCount > 1)
+            {
+                Debug.Log("注意有两个优先级 一样的步骤");
+            }
+        }
+
+       
+       // if (!m_bLockStep)
+       // {
+       //     // 步骤 没有 锁定
+       //     Debug.Log("步骤 没有 锁定");
+       // }
+       // else
+       // {
+       //     // 步骤 锁定了
+       //     Debug.Log(" 步骤 锁定了");
+       //
+       // }
+        // 步骤 没有锁定的
+        int nBigIndex = 0;
+        int nTmpBig = -1;
+        int nLockBigStepIndex = m_nLockBigStepIndex;
+        bool nLockStep = m_bLockStep;
+
+       
+        
+        foreach (var sb in papers.data[paperManager.nIndexReCover].t1.step)
+        {
+           // bool bCheckLock = false;
+            if (!nLockStep)
+            {
+                // 步骤 没有 锁定
+                Debug.Log("步骤 没有 锁定");
+            }
+            else
+            {
+                // 步骤 锁定了
+                Debug.Log(" 步骤 锁定了");
+               if(nBigIndex != nLockBigStepIndex)
+                {
+                    nBigIndex++;
+                    continue;
+                }
+
+            }
+            // 判断 当前 是否有 可跳过的小步骤
+
+            int nSmailJumpCount = 0;
+            int nSmailIndex = 0;
+            // 找出 最小优先级的 小步骤
+            int nSLevelTmp = -1;
+
+            int nSMaxLevelTmp = -1;
+         //   int nNextSLevelTmp = -1;
+            int nSLevelCount = 0;
+
+            int nNoDoneNoJumpCount = 0; // 当前 没有做的 步骤的个数
+            int nLenSmail = sb.step.Count;
+            
+            int nNoDoneCount = 0;
+            foreach (var ss in sb.step)
+            {
+                if (!ss.bDone)
+                {
+                    nNoDoneCount++;
+                }
+            }
+            int[] arrSmailLevel = new int[nNoDoneCount];
+
+            int nI = 0;
+            foreach (var ss in sb.step)
+            {
+                if (!ss.bDone)
+                {
+                    arrSmailLevel[nI++] = ss.level;
+                }
+            }
+
+            // 冒泡排序方法
+            for (int i = 0; i < arrSmailLevel.Length - 1; i++)
+            {
+                for (int x = 0; x < arrSmailLevel.Length - 1 - i; x++)
+                {
+                    if (arrSmailLevel[x] > arrSmailLevel[x + 1])
+                    {
+                        // 数值交换
+                        int a = arrSmailLevel[x];
+                        arrSmailLevel[x] = arrSmailLevel[x + 1];
+                        arrSmailLevel[x + 1] = a;
+                    }
+                }
+            }
+            if (g_isReSetSmailLevel)
+            {
+                
+               
+                foreach (var ss in sb.step)
+                {
+                    if (!ss.bDone)
+                    {
+
+                        if (!ss.bCkJump)
+                        {
+                            nNoDoneNoJumpCount++;
+                        }
+                        if (nSLevelTmp == -1)
+                        {
+                            nSLevelTmp = ss.level;
+                            //  nNextSLevelTmp = 1;
+                            nSLevelCount = 1;
+                            nSMaxLevelTmp = 1;
+                        }
+                        else
+                        {
+                            if (nSLevelTmp == ss.level)
+                            {
+                                nSLevelCount++;
+                            }
+                            nSLevelTmp = nSLevelTmp < ss.level ? nSLevelTmp : ss.level;
+                            nSMaxLevelTmp = nSMaxLevelTmp < ss.level ? ss.level : nSMaxLevelTmp;
+                            // 预测 下一个 优先级
+                        }
+                      //  arrSmailLevel[nI++] = ss.level;
+                    }
+                }
+
+              
+
+
+                if (nNoDoneNoJumpCount > 0 && nSMaxLevelTmp > nSLevelTmp)
+                {
+                    Debug.Log("当前的步骤 还有 不可跳过且必须要做的步骤   nNoDoneNoJumpCount = " + nNoDoneNoJumpCount + "最小优先级:" + nSLevelTmp + "最大优先级" + nSMaxLevelTmp);
+                }
+            }
+          
+
+           
+
+            if (sb.blevel == nBigLevel)
+            {
+                if(nSLevelCount > 1)
+                {
+                    Debug.Log("当前小步骤 居然有两个 最小的优先级呢？" + nSLevelTmp);
+                }
+                foreach (var ss in sb.step)
+                {
+                    if(ss.level == nSLevelTmp && !ss.bDone)
+                    {
+                        Debug.LogFormat("{0},{1},{2}",ss.type_operation, ss.key , ss.value);
+                        if(ss.type_operation == type_operation && ss.key == key)
+                        {
+                            // 触发了 该步骤的 操作了
+                            if(ss.value == value)
+                            {
+                                nTmpBig = nBigIndex;
+                                m_nLockSmailStepIndex = nSmailIndex;
+                                // 表示做对了
+                                if (!m_bLockStep)
+                                {
+                                    m_bLockStep = true;
+                                    m_nLockBigStepIndex = nBigIndex;
+                                }
+                                Debug.Log("用户 做对了 哈哈！");
+                                Debug.Log("判断 特效 对不对 啦啦啦！");
+
+                                papers.data[paperManager.nIndexReCover].t1.step[nBigIndex].step[nSmailIndex].bDoneUser = true;
+                                papers.data[paperManager.nIndexReCover].t1.step[nBigIndex].step[nSmailIndex].bDone = true;
+
+                                tagRtDoStep.eStepRt = e_result.e_ok;
+                            }
+                            else
+                            {
+                                // 除了认知 表示 都做对了
+                                if (ss.bCkMainStep)
+                                {
+                                    Debug.Log("关键步骤 居然 还做错了 真是遗憾了");
+
+                                    tagRtDoStep.eStepRt = e_result.e_error_main;
+                                }
+                                if (ss.bCkJump)
+                                {
+                                    Debug.Log("当前是一个 答错了 就直接跳过的步骤");
+                                    tagRtDoStep.eStepRt = e_result.e_error_jump;
+
+                                    papers.data[paperManager.nIndexReCover].t1.step[nBigIndex].step[nSmailIndex].bDoneUser = false;
+                                    papers.data[paperManager.nIndexReCover].t1.step[nBigIndex].step[nSmailIndex].bDone = true;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // 动态 调整小步骤的 优先级
+                            //
+                           // nSLevelTmp = nSLevelTmp + 1;
+                            Debug.Log("动态调整小步骤的优先级");
+
+                            int nTmp = 0;
+                            for(int i = 0;i< arrSmailLevel.Length; i++)
+                            {
+                              
+                                if(nTmp > nSLevelTmp)
+                                {
+                                    nSLevelTmp = nTmp;
+                                    break;
+                                }
+                            }
+                            Debug.Log("动态调整小步骤的优先级,调整后的结果是:nSLevelTmp" + nSLevelTmp);
+                            // 判定 当前 最小 优先级 是否 还有 不可跳过的 
+                            int nNoDoneSTmpCount = 0;
+                            foreach(var k in sb.step)
+                            {
+                                if(!k.bDone && !k.bCkJump)
+                                {
+                                    nNoDoneSTmpCount++;
+                                }
+                            }
+                            if(nNoDoneSTmpCount == 0)
+                            {
+                                // 如果 不存在了 那么 就 调整 下一个优先级
+                                g_isReSetSmailLevel = false;
+                                nSLevelTmp = nSLevelTmp+1;
+
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Debug.Log("在小步骤 哈哈 没找到 匹配的 我们要继续 查找 nSmailIndex= " + nSmailIndex);
+
+                        // 调整 小步骤的 优先级
+
+
+                        if (nSmailIndex == sb.step.Count-1)
+                        {
+                            Debug.Log("我们在该大步骤的所有小步骤中 都没有找到哦！");
+
+                            //  这里的 这个 nBigLevel 要 动态的 去修改一下
+
+                            if (nNoDoneNoJumpCount == 0 && sb.blevel == nBigLevel) // 大步骤哦
+                            {
+                                nLockStep = false;
+                                int nTmp = nBigLevel;
+                                // 我们 必须 进行 大步骤的 跳跃 来寻找了
+                                for (int i = 0; i < arrBigLevel.Length; i++)
+                                {
+                                    if (arrBigLevel[i] > nTmp)
+                                    {
+                                        nTmp = arrBigLevel[2];
+                                        break;
+                                    }
+                                }
+                                if(nTmp == nBigLevel)
+                                {
+                                    Debug.Log("完全 没有必要找了 ");
+                                }
+                                else
+                                {
+                                    nBigLevel = nTmp;
+                                }
+                            }
+                        }
+                    }
+
+
+                    nSmailIndex++;
+                }
+            }
+            nBigIndex++;
+        }
+
+        // 判断 当前的 大步骤 做完了 没有哦
+
+        if(nTmpBig > -1)
+        {
+            int nK = 0;
+            int nKCount = 0;
+            int nKUser = 0;
+            foreach (var sb in papers.data[paperManager.nIndexReCover].t1.step[nTmpBig].step)
+            {
+                if (sb.bDone)
+                {
+                    nKCount++;
+                }
+                if (sb.bDoneUser)
+                {
+                    nKUser++;
+                }
+                nK++;
+            }
+            if(nK == nKCount)
+            {
+                Debug.Log("该大步骤都做完了");
+                papers.data[paperManager.nIndexReCover].t1.step[nTmpBig].bDone = true;
+                m_bLockStep = false;
+                if (nKUser == nK)
+                {
+                    Debug.Log("该大步骤 用户 都做对了 哈哈！");
+                }
+                else
+                {
+                    Debug.Log("该大步骤 用户 做完了 但是 有部分步骤 没有做对");
+                }
+            }
+            else
+            {
+                Debug.Log("该大步骤 没有做完");
+            }
+        }
+
+        // 判断 当前 试卷 做完了 没有哦
+
+        int nOkTotal = 0;
+        foreach (var sb in papers.data[paperManager.nIndexReCover].t1.step)
+        {
+            if (sb.bDone)
+            {
+                nOkTotal++;
+            }
+        }
+        if(nOkTotal == papers.data[paperManager.nIndexReCover].t1.step.Count)
+        {
+            Debug.Log("该试卷 做完了");
+        }
+        else
+        {
+            Debug.Log("该试卷 没有做完");
+        }
+
+        foreach (var sb in papers.data[paperManager.nIndexReCover].t1.step)
+        {
+            
+            foreach(var ss in sb.step)
+            {
+
+            }
+        }
+    }
+
+    bool _g_blockstep = false;
+    int _g_nlockstep = 0;
+    void ReCoverStep2(string type_operation, string key, string value)
+    {
+        // 一直循环 直到 找到 所需要的结果
+        int sbIndex = 0;
+        int skIndex = 0;
+        bool bFind = false;
+        foreach (var sb in papers.data[paperManager.nIndexReCover].t1.step)
+        { 
+            if (!sb.bDone)
+            {
+                skIndex = 0;
+                foreach (var sk in sb.step)
+                {
+                    if (!sk.bDone)
+                    {
+                        if(sk.type_operation == type_operation && sk.key == key)
+                        {
+                            if(sk.value == value)
+                            {
+                              //  Debug.Log("回答正确了.." + type_operation + key + value + sk.level + sbIndex + skIndex);
+                             //   Debug.Log("回答正确了..blevel" + sb.blevel+ "   level" + sk.level + "   sbIndex" + sbIndex+ "  skIndex" + skIndex);
+
+
+                              
+                                bFind = true;
+                                break;
+                            }
+                            else
+                            {
+                                if (sk.bCkMainStep)
+                                {
+                                    // 关键项错误了
+                                }
+                                if (sk.bCkJump)
+                                {
+                                    // 可以跳过的
+                                }
+                            }
+                        }
+                    }
+                    skIndex++;
+                }
+            }
+            if (bFind)
+            {
+              
+                break;
+            }
+            sbIndex++;
+        }
+     //   Debug.Log("当前深度:sbIndex  " + sbIndex+ "  skIndex  " + skIndex);
+
+        // 判定 当前的 大步骤
+        // 判定 当前 命中 之前 是否 还有 不可跳过的
+        int nIndexBig = 0;
+        int nIndexSmail = 0;
+        int nNodoneButNoJumpCount = 0;
+        int nNodoneCount = 0;
+        if (bFind)
+        {
+          //  Debug.Log("找到 匹配的操作！");
+            int nBigLevel = 0;
+            int nSmailLevel = 0;
+
+            int nCountBigLevel = 0;
+            int nCountSmailLevel = 0;
+            foreach (var sb in papers.data[paperManager.nIndexReCover].t1.step)
+            {
+                if (!sb.bDone && nIndexBig <= sbIndex)
+                {
+                    if (nBigLevel == 0)
+                    {
+                        nBigLevel = sb.blevel;
+                        nCountBigLevel++;
+                    }
+                    else
+                    {
+                        nBigLevel = nBigLevel < sb.blevel ? nBigLevel:sb.blevel;
+                        if(nBigLevel == sb.blevel)
+                        {
+                            nCountBigLevel++;
+                        }
+                    }
+                    nIndexSmail = 0;
+                    foreach (var sk in sb.step)
+                    {
+                        if (!sk.bDone && !sk.bCkJump && nIndexSmail <= skIndex)
+                        {
+                            nNodoneButNoJumpCount++;
+                        }
+
+                        if (!sk.bDone)
+                        {
+                            nNoeCount++;
+                        }
+                        nIndexSmail++;
+                    }
+                }
+                nIndexBig++;
+            }
+
+          
+        //    Debug.Log("当前大步骤的最小优先级是:" + nBigLevel);
+        //    Debug.Log("当前大步骤的最小优先级个数:" + nCountBigLevel);
+            // 找出 当前 未做的 大步骤的 最小优先级
+
+            /////////////////////////////////////////////////////////
+           if (nCountBigLevel >1 && nBigLevel == papers.data[paperManager.nIndexReCover].t1.step[sbIndex].blevel)
+           {
+           //    Debug.Log("当前的 大步骤 也是可以的 但是 必须要将 该大步骤 全部做完哦！");
+               _g_blockstep = true;
+               _g_nlockstep = sbIndex;
+          
+          
+               if (_g_nlockstep == sbIndex)
+               {
+                  
+               }
+           }
+            ////////////////////////////////////////////////////////
+
+
+            ///
+            int ntmpLevelSmail = 0;
+            int ntmpLevelSmailCount = 0;
+            foreach (var sg in papers.data[paperManager.nIndexReCover].t1.step[sbIndex].step)
+            {
+                if (!sg.bDone)
+                {
+                    if(ntmpLevelSmail == 0)
+                    {
+                        ntmpLevelSmail = sg.level;
+                        ntmpLevelSmailCount++;
+                    }
+                    else
+                    {
+                        ntmpLevelSmail = ntmpLevelSmail < sg.level ? ntmpLevelSmail : sg.level;
+                        if(ntmpLevelSmail == sg.level)
+                        {
+                            ntmpLevelSmailCount++;
+                        }
+                    }
+                }
+            }
+
+            if (ntmpLevelSmailCount > 1)
+            {
+                // 当前 优先级吧
+
+            }
+
+            if (_g_blockstep)// 锁定的
+            {
+                if(_g_nlockstep == sbIndex)
+                {
+                    //
+                    if(ntmpLevelSmail == papers.data[paperManager.nIndexReCover].t1.step[sbIndex].step[skIndex].level)
+                    {
+                        Debug.Log("锁定大步骤 回答正确了.." + type_operation + key + value + sbIndex + skIndex);
+                        // 看看 是不是 小步骤的 优先级
+                        papers.data[paperManager.nIndexReCover].t1.step[sbIndex].step[skIndex].bDone = true;
+
+
+                        if (nCountBigLevel > 1 && nBigLevel == papers.data[paperManager.nIndexReCover].t1.step[sbIndex].blevel)
+                        {
+                            //    Debug.Log("当前的 大步骤 也是可以的 但是 必须要将 该大步骤 全部做完哦！");
+                            _g_blockstep = true;
+                            _g_nlockstep = sbIndex;
+
+
+                            if (_g_nlockstep == sbIndex)
+                            {
+
+                            }
+                        }
+
+                    }
+                    
+                }
+            }
+            else
+            {
+                if (nNodoneButNoJumpCount <= 1)
+                {
+                   
+                    if (ntmpLevelSmail == papers.data[paperManager.nIndexReCover].t1.step[sbIndex].step[skIndex].level)
+                    {
+                        Debug.Log("锁定大步骤 回答正确了.." + type_operation + key + value + sbIndex + skIndex);
+                        // 看看 是不是 小步骤的 优先级
+                        papers.data[paperManager.nIndexReCover].t1.step[sbIndex].step[skIndex].bDone = true;
+
+
+                        if (nCountBigLevel > 1 && nBigLevel == papers.data[paperManager.nIndexReCover].t1.step[sbIndex].blevel)
+                        {
+                            //    Debug.Log("当前的 大步骤 也是可以的 但是 必须要将 该大步骤 全部做完哦！");
+                            _g_blockstep = true;
+                            _g_nlockstep = sbIndex;
+
+
+                            if (_g_nlockstep == sbIndex)
+                            {
+
+                            }
+                        }
+                    }
+                }
+            }
+            /// 设置 之前 的 都是 bdone
+            /// 
+
+            /*
+            if (nNodoneButNoJumpCount <= 1)
+            {
+
+                if (nCountBigLevel > 1 && nBigLevel == papers.data[paperManager.nIndexReCover].t1.step[sbIndex].blevel)
+                {
+                 //   Debug.Log("当前的 大步骤 也是可以的 但是 必须要将 该大步骤 全部做完哦！");
+                    if (!_g_blockstep)
+                    {
+                        _g_blockstep = true;
+                        _g_nlockstep = sbIndex;
+                    }
+                   
+                }
+
+                if (_g_blockstep)
+                {
+                    if(_g_nlockstep == sbIndex)
+                    {
+                     //   Debug.Log("锁定大步骤 回答正确了.." + type_operation + key + value + sbIndex + skIndex);
+                     //   papers.data[paperManager.nIndexReCover].t1.step[sbIndex].step[skIndex].bDone = true;
+                    }
+                }
+                else
+                {
+                   // Debug.Log("不锁定大步骤 回答正确了.." + type_operation + key + value + sbIndex + skIndex);
+                  //  papers.data[paperManager.nIndexReCover].t1.step[sbIndex].step[skIndex].bDone = true;
+                }
+              
+               
+            }*/
+
+            int nCountss = 0;
+            // 判定 当前 大步骤 是否 全部 做完 
+            foreach (var sg in papers.data[paperManager.nIndexReCover].t1.step[sbIndex].step)
+            {
+                if (!sg.bDone)
+                {
+                    nCountss++;
+                }
+            }
+            // 做完了
+            if (nCountss == 0)
+            {
+                papers.data[paperManager.nIndexReCover].t1.step[sbIndex].bDone = true;
+             
+                _g_blockstep = false;
+                _g_nlockstep = 0;
+
+                // 设置 比在这个 优先级低的 都 设置 做完了
+                foreach (var sg in papers.data[paperManager.nIndexReCover].t1.step)
+                {
+                    if (!sg.bDone)
+                    {
+                         if(sg.blevel< nBigLevel)
+                        {
+                            sg.bDone = true;
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            Debug.Log("没有找到 匹配的操作！");
+        }
+      
+     //   Debug.Log("不可跳过的步骤个数为:" + nNodoneButNoJumpCount);
+     }
     bool PreCheck(string type_operation, string key, string value)
     {
+        // 要不就写个 while 循环 吧
+
         bool bOk = false;
         //预测 下个步骤 里面的值
         //前提条件：1.大步骤里面的小步骤，当前优先级是不是 只有 一个步骤了。2.小步骤是不是可以跳过。3.跳过之后的 后续呢
-
         // 这个 地方的 主要问题 是 进行 超前的 下个步骤的预判
         // 并重新进行 步骤的对比
 
@@ -1340,6 +2031,8 @@ public class CLoadPaper : MonoBehaviour {
         public bool bBigHasMore { get; set; } // 是不是多个同一个优先级的步骤
         public bool bJustOneBigOver { get; set; } // 一个大步骤  刚好 做完了
         public bool bLockIndex { get; set; } // 一个大步骤  刚好 做完了
+
+        public int nIndexReCover { get; set; } // 试卷的题目 索引
     }
 
 #region 以下 是 解析 题目 存储类
